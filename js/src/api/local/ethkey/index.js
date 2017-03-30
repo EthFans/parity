@@ -21,13 +21,18 @@ const hasWebWorkers = typeof Worker !== 'undefined';
 const KeyWorker = hasWebWorkers ? require('worker-loader!./worker')
                                 : require('./worker').KeyWorker;
 
-// Local accounts should never be used outside of the browser
-export let keythereum = null;
+function workerAction (action, payload) {
+  const start = Date.now();
 
-if (hasWebWorkers) {
-  require('keythereum/dist/keythereum');
+  return new Promise((resolve, reject) => {
+    const worker = new KeyWorker();
 
-  keythereum = window.keythereum;
+    worker.postMessage({ action, payload });
+    worker.onmessage = ({ data }) => {
+      console.log('worker done in', Date.now() - start);
+      resolve(data);
+    };
+  });
 }
 
 export function phraseToAddress (phrase) {
@@ -35,14 +40,11 @@ export function phraseToAddress (phrase) {
 }
 
 export function phraseToWallet (phrase) {
-  return new Promise((resolve, reject) => {
-    const worker = new KeyWorker();
+  return workerAction('phraseToWallet', phrase);
+}
 
-    worker.postMessage(phrase);
-    worker.onmessage = ({ data }) => {
-      resolve(data);
-    };
-  });
+export function createKeyObject (key, password) {
+  return workerAction('createKeyObject', { key, password });
 }
 
 export function randomBytes (length) {
