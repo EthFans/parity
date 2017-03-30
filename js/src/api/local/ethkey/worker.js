@@ -14,8 +14,9 @@
 // You should have received a copy of the GNU General Public License
 // along with Parity.  If not, see <http://www.gnu.org/licenses/>.
 
-import { keccak_256 as keccak256 } from 'js-sha3';
 import secp256k1 from 'secp256k1/js';
+import keccak from 'keccak';
+import { keccak_256 as keccak256 } from 'js-sha3';
 
 // Stay compatible between environments
 if (typeof self !== 'object') {
@@ -28,23 +29,32 @@ function bytesToHex (bytes) {
   return '0x' + Array.from(bytes).map(n => ('0' + n.toString(16)).slice(-2)).join('');
 }
 
+const hash = keccak('keccak256');
+
+function kec256 (data) {
+  hash._resetState();
+  hash._finalized = false;
+  return hash.update(data).digest();
+  // return keccak256.array(data);
+}
+
 // Logic ported from /ethkey/src/brain.rs
 function phraseToWallet (phrase) {
-  let secret = keccak256.array(phrase);
+  let secret = kec256(phrase);
 
   for (let i = 0; i < 16384; i++) {
-    secret = keccak256.array(secret);
+    secret = kec256(secret);
   }
 
   while (true) {
-    secret = keccak256.array(secret);
+    secret = kec256(secret);
 
     const secretBuf = Buffer.from(secret);
 
     if (secp256k1.privateKeyVerify(secretBuf)) {
       // No compression, slice out last 64 bytes
       const publicBuf = secp256k1.publicKeyCreate(secretBuf, false).slice(-64);
-      const address = keccak256.array(publicBuf).slice(12);
+      const address = kec256(publicBuf).slice(12);
 
       if (address[0] !== 0) {
         continue;

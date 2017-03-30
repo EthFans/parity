@@ -23,7 +23,7 @@ import {
   randomPhrase
 } from './';
 
-describe('api/local/ethkey', () => {
+describe.only('api/local/ethkey', () => {
   describe('randomNumber', () => {
     it('generates numbers in range', () => {
       for (let i = 0; i < 100; i++) {
@@ -56,7 +56,7 @@ describe('api/local/ethkey', () => {
     });
   });
 
-  describe.skip('phraseToAddress', function () {
+  describe('phraseToAddress', function () {
     this.timeout(10000);
 
     it('generates a valid address', () => {
@@ -75,7 +75,7 @@ describe('api/local/ethkey', () => {
     });
   });
 
-  describe.skip('phraseToWallet', function () {
+  describe('phraseToWallet', function () {
     this.timeout(10000);
 
     it('generates a valid wallet object', () => {
