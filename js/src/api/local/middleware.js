@@ -137,30 +137,33 @@ export default class LocalAccountsMiddleware extends Middleware {
         data
       } = Object.assign(transactions.get(id), modify);
 
-      return this
-        .rpcRequest('parity_nextNonce', [from])
-        .then((nonce) => {
-          const tx = new EthereumTx({
-            nonce,
-            to,
-            data,
-            gasLimit: inNumber16(gasLimit),
-            gasPrice: inNumber16(gasPrice),
-            value: inNumber16(value)
-          });
-          const account = accounts.get(from);
+      const account = accounts.get(from);
 
-          tx.sign(account.decryptPrivateKey(password));
-
-          const serializedTx = `0x${tx.serialize().toString('hex')}`;
-
-          return this.rpcRequest('eth_sendRawTransaction', [serializedTx]);
-        })
-        .then((hash) => {
-          transactions.confirm(id, hash);
-
-          return {};
+      return Promise.all([
+        this.rpcRequest('parity_nextNonce', [from]),
+        account.decryptPrivateKey(password)
+      ])
+      .then(([nonce, privateKey]) => {
+        const tx = new EthereumTx({
+          nonce,
+          to,
+          data,
+          gasLimit: inNumber16(gasLimit),
+          gasPrice: inNumber16(gasPrice),
+          value: inNumber16(value)
         });
+
+        tx.sign(privateKey);
+
+        const serializedTx = `0x${tx.serialize().toString('hex')}`;
+
+        return this.rpcRequest('eth_sendRawTransaction', [serializedTx]);
+      })
+      .then((hash) => {
+        transactions.confirm(id, hash);
+
+        return {};
+      });
     });
 
     register('signer_rejectRequest', ([id]) => {

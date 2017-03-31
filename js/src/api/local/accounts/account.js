@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Parity.  If not, see <http://www.gnu.org/licenses/>.
 
-import { createKeyObject } from '../ethkey';
+import { createKeyObject, decryptPrivateKey } from '../ethkey';
 
 export default class Account {
   constructor (persist, data) {
@@ -31,12 +31,14 @@ export default class Account {
   }
 
   isValidPassword (password) {
-    try {
-      keythereum.recover(Buffer.from(password), this._keyObject);
-      return true;
-    } catch (e) {
-      return false;
-    }
+    return decryptPrivateKey(this._keyObject, password)
+      .then((privateKey) => {
+        if (!privateKey) {
+          return false;
+        }
+
+        return true;
+      });
   }
 
   get address () {
@@ -68,7 +70,7 @@ export default class Account {
   }
 
   decryptPrivateKey (password) {
-    return keythereum.recover(Buffer.from(password), this._keyObject);
+    return decryptPrivateKey(this._keyObject, password);
   }
 
   static fromPrivateKey (persist, key, password) {

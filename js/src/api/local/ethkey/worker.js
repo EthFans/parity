@@ -77,13 +77,27 @@ const actions = {
   },
 
   createKeyObject ({ key, password }) {
-    const iv = keythereum.crypto.randomBytes(16);
-    const salt = keythereum.crypto.randomBytes(32);
-
-    // Keythereum will fail if `password` is an empty string
+    key = Buffer.from(key);
     password = Buffer.from(password);
 
-    return keythereum.dump(password, key, salt, iv);
+    const iv = keythereum.crypto.randomBytes(16);
+    const salt = keythereum.crypto.randomBytes(32);
+    const keyObject = keythereum.dump(password, key, salt, iv);
+
+    return JSON.stringify(keyObject);
+  },
+
+  decryptPrivateKey ({ keyObject, password }) {
+    password = Buffer.from(password);
+
+    try {
+      const key = keythereum.recover(password, keyObject);
+
+      // Convert to array to safely send from the worker
+      return Array.from(key);
+    } catch (e) {
+      return null;
+    }
   }
 };
 
@@ -95,7 +109,6 @@ self.onmessage = function ({ data }) {
   const result = route(data);
 
   postMessage(result);
-  close();
 };
 
 // Emulate a web worker in Node.js

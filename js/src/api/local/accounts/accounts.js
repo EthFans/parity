@@ -38,14 +38,16 @@ export default class Accounts {
 
   create (secret, password) {
     const privateKey = Buffer.from(secret.slice(2), 'hex');
-    const account = Account.fromPrivateKey(this.persist, privateKey, password);
 
-    this._store.push(account);
-    this.lastAddress = account.address;
+    return Account.fromPrivateKey(this.persist, privateKey, password)
+      .then((account) => {
+        this._store.push(account);
+        this.lastAddress = account.address;
 
-    this.persist();
+        this.persist();
 
-    return account.address;
+        return account.address;
+      });
   }
 
   set lastAddress (value) {
@@ -73,28 +75,34 @@ export default class Accounts {
   remove (address, password) {
     address = address.toLowerCase();
 
-    const index = this._store.findIndex((account) => account.address === address);
+    const account = this.get(address);
 
-    if (index === -1) {
+    if (!account) {
       return false;
     }
 
-    const account = this._store[index];
+    return account.isValidPassword(password)
+      .then((isValid) => {
+        if (!isValid) {
+          return false;
+        }
 
-    if (!account.isValidPassword(password)) {
-      console.log('invalid password');
-      return false;
-    }
+        const index = this._store.findIndex((account) => account.address === address);
 
-    if (address === this.lastAddress) {
-      this.lastAddress = NULL_ADDRESS;
-    }
+        if (index === -1) {
+          return false;
+        }
 
-    this._store.splice(index, 1);
+        if (address === this.lastAddress) {
+          this.lastAddress = NULL_ADDRESS;
+        }
 
-    this.persist();
+        this._store.splice(index, 1);
 
-    return true;
+        this.persist();
+
+        return true;
+      });
   }
 
   mapArray (mapper) {
