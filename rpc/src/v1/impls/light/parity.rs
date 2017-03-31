@@ -234,7 +234,7 @@ impl Parity for ParityClient {
 		Ok(
 			txq.ready_transactions(chain_info.best_block_number, chain_info.best_block_timestamp)
 				.into_iter()
-				.map(Into::into)
+				.map(|tx| Transaction::from_pending(tx, chain_info.best_block_number, u64::max_value())) //TODO: enable EIP-86
 				.collect::<Vec<_>>()
 		)
 	}
@@ -245,7 +245,7 @@ impl Parity for ParityClient {
 		Ok(
 			txq.future_transactions(chain_info.best_block_number, chain_info.best_block_timestamp)
 				.into_iter()
-				.map(Into::into)
+				.map(|tx| Transaction::from_pending(tx, chain_info.best_block_number, u64::max_value())) //TODO: enable EIP-86
 				.collect::<Vec<_>>()
 		)
 	}

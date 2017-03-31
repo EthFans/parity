@@ -19,12 +19,15 @@
 use std::ops::Deref;
 use rlp::*;
 use util::sha3::Hashable;
-use util::{H256, Address, U256, Bytes, HeapSizeOf};
+use util::{H256, Address, U256, Bytes, HeapSizeOf, Uint};
 use ethkey::{Signature, Secret, Public, recover, public_to_address, Error as EthkeyError};
 use error::*;
 use evm::Schedule;
 use header::BlockNumber;
 use ethjson;
+
+/// Fake address for unsigned transactions as defined by EIP-86.
+pub const UNSIGNED_SENDER: Address = ::util::H160([0xff; 20]);
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "ipc", binary)]
@@ -198,7 +201,7 @@ impl Transaction {
 				hash: 0.into(),
 			}.compute_hash(),
 			sender: from,
-			public: Public::default(),
+			public: None,
 		}
 	}
 
@@ -274,6 +277,11 @@ impl UnverifiedTransaction {
 		let hash = (&*self.rlp_bytes()).sha3();
 		self.hash = hash;
 		self
+	}
+
+	/// Checks is signature is empty.
+	pub fn is_unsigned(&self) -> bool {
+		self.r.is_zero() && self.s.is_zero()
 	}
 
 	/// Append object with a signature into RLP stream
@@ -356,6 +364,22 @@ impl UnverifiedTransaction {
 			Ok(self)
 		}
 	}
+
+	/// Verify basic signature params. Does not attempt sender recovery.
+	pub fn verify_basic(&self, check_low_s: bool, chain_id: Option<u64>, allow_empty_signature: bool) -> Result<(), Error> {
+		if check_low_s && !allow_empty_signature {
+			self.check_low_s()?;
+		}
+		if !allow_empty_signature && self.is_unsigned() {
+			return Err(EthkeyError::InvalidSignature.into())
+		}
+		match (self.network_id(), chain_id) {
+			(None, _) => {},
+			(Some(n), Some(m)) if n == m => {},
+			_ => return Err(TransactionError::InvalidNetworkId.into()),
+		};
+		Ok(())
+	}
 }
 
 /// A `UnverifiedTransaction` with successfully recovered `sender`.
@@ -363,7 +387,7 @@ impl UnverifiedTransaction {
 pub struct SignedTransaction {
 	transaction: UnverifiedTransaction,
 	sender: Address,
-	public: Public,
+	public: Option<Public>,
 }
 
 impl HeapSizeOf for SignedTransaction {
@@ -392,13 +416,21 @@ impl From<SignedTransaction> for UnverifiedTransaction {
 impl SignedTransaction {
 	/// Try to verify transaction and recover sender.
 	pub fn new(transaction: UnverifiedTransaction) -> Result<Self, Error> {
-		let public = transaction.recover_public()?;
-		let sender = public_to_address(&public);
-		Ok(SignedTransaction {
-			transaction: transaction,
-			sender: sender,
-			public: public,
-		})
+		if transaction.is_unsigned() {
+			Ok(SignedTransaction {
+				transaction: transaction,
+				sender: UNSIGNED_SENDER,
+				public: None,
+			})
+		} else {
+			let public = transaction.recover_public()?;
+			let sender = public_to_address(&public);
+			Ok(SignedTransaction {
+				transaction: transaction,
+				sender: sender,
+				public: Some(public),
+			})
+		}
 	}
 
 	/// Returns transaction sender.
@@ -407,8 +439,13 @@ impl SignedTransaction {
 	}
 
 	/// Returns a public key of the sender.
-	pub fn public_key(&self) -> Public {
+	pub fn public_key(&self) -> Option<Public> {
 		self.public
+	}
+
+	/// Checks is signature is empty.
+	pub fn is_unsigned(&self) -> bool {
+		self.transaction.is_unsigned()
 	}
 }
 
@@ -434,6 +471,9 @@ impl LocalizedTransaction {
 	pub fn sender(&mut self) -> Address {
 		if let Some(sender) = self.cached_sender {
 			return sender;
+		}
+		if self.is_unsigned() {
+			return UNSIGNED_SENDER.clone();
 		}
 		let sender = public_to_address(&self.recover_public()
 			.expect("LocalizedTransaction is always constructed from transaction from blockchain; Blockchain only stores verified transactions; qed"));
