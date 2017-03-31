@@ -370,7 +370,8 @@ impl UnverifiedTransaction {
 		if check_low_s && !allow_empty_signature {
 			self.check_low_s()?;
 		}
-		if !allow_empty_signature && self.is_unsigned() {
+		// EIP-86: Transactions of this form MUST have gasprice = 0, nonce = 0, value = 0, and do NOT increment the nonce of account 0.
+		if !allow_empty_signature && self.is_unsigned() && self.gas_price.is_zero() && self.value.is_zero() && self.nonce.is_zero() {
 			return Err(EthkeyError::InvalidSignature.into())
 		}
 		match (self.network_id(), chain_id) {
